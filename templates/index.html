@@ -3,13 +3,25 @@
 <head>
     <meta charset="utf-8">
     <title>{{ name }}'s Watchlist</title>
+
+    <!-- 网站图标 -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
+
+    <!-- 引入 CSS 样式文件 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">
 </head>
+
 <body>
     <h2>{{ name|upper }}'s Watchlist</h2>
 
+    <!-- 电影图片 -->
+    <img src="{{ url_for('static', filename='images/movie.png') }}" alt="Movie">
+
+    <!-- 电影数量 -->
     <p>{{ movies|length }} Titles</p>
 
-    <ul>
+    <!-- 电影列表 -->
+    <ul class="movie-list">
         {% for movie in movies %}
         <li>{{ movie.title }} - {{ movie.year }}</li>
         {% endfor %}
