@@ -3,12 +3,14 @@ import sys
 from pathlib import Path
 import click
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
 
 app = Flask(__name__)
+
+app.config['SECRET_KEY'] = 'dev'
 
 # 根据操作系统选择 SQLite 路径前缀
 SQLITE_PREFIX = 'sqlite:///' if sys.platform.startswith('win') else 'sqlite:////'
@@ -56,10 +58,38 @@ def inject_user():
     return dict(user=user)
 
 
-# 首页路由
-@app.route('/')
+# 首页路由：显示电影和添加电影
+@app.route('/', methods=['GET', 'POST'])
 def index():
     user = User.query.first()
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        year = request.form.get('year', '').strip()
+
+        # 表单验证
+        if not title or not year:
+            flash('Title and year are required.')
+            return redirect(url_for('index'))
+
+        if len(title) > 60:
+            flash('Title is too long.')
+            return redirect(url_for('index'))
+
+        if len(year) != 4 or not year.isdigit():
+            flash('Year must be a 4-digit number.')
+            return redirect(url_for('index'))
+
+        # 创建电影并关联用户
+        movie = Movie(title=title, year=year, user=user)
+
+        db.session.add(movie)
+        db.session.commit()
+
+        flash('Item created.')
+        return redirect(url_for('index'))
+
+    # 查询所有电影
     movies = Movie.query.all()
 
     name = user.name if user else 'Grey Li'
@@ -69,7 +99,50 @@ def index():
         name=name,
         movies=movies
     )
+
+
+# 编辑电影路由
+@app.route('/movie/edit/<int:movie_id>', methods=['GET', 'POST'])
+def edit(movie_id):
+    movie = db.get_or_404(Movie, movie_id)
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        year = request.form.get('year', '').strip()
+
+        if not title or not year:
+            flash('Title and year are required.')
+            return redirect(url_for('edit', movie_id=movie_id))
+
+        if len(title) > 60:
+            flash('Title is too long.')
+            return redirect(url_for('edit', movie_id=movie_id))
+
+        if len(year) != 4 or not year.isdigit():
+            flash('Year must be a 4-digit number.')
+            return redirect(url_for('edit', movie_id=movie_id))
+
+        movie.title = title
+        movie.year = year
+
+        db.session.commit()
+
+        flash('Item updated.')
+        return redirect(url_for('index'))
+
+    return render_template('edit.html', movie=movie)
     
+# 删除电影路由
+@app.route('/movie/delete/<int:movie_id>', methods=['POST'])
+def delete(movie_id):
+    movie = db.get_or_404(Movie, movie_id)
+
+    db.session.delete(movie)
+    db.session.commit()
+
+    flash('Item deleted.')
+    return redirect(url_for('index'))
+
 
 # 自定义 404 错误页面
 @app.errorhandler(404)
@@ -107,9 +180,13 @@ def forge():
     user = User(name=name)
     db.session.add(user)
 
-    # 添加电影
+    # 添加电影并关联用户
     for m in movies:
-        movie = Movie(title=m['title'], year=m['year'])
+        movie = Movie(
+            title=m['title'],
+            year=m['year'],
+            user=user
+        )
         db.session.add(movie)
 
     # 提交到数据库
